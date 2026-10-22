@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <header>
+        <h1>Admin Panel</h1>
+        <nav>
+            <a href="/">Dashboard</a>
+            <a href="/admin">Admin</a>
+        </nav>
+    </header>
+    <main id="admin-content">
+        <div id="login-section">
+            <h2>Login</h2>
+            <input type="password" id="admin-password" placeholder="Password">
+            <button onclick="login()">Login</button>
+            <p id="login-error"></p>
+        </div>
+        <div id="admin-panel" style="display:none;">
+            <h2>Recording</h2>
+            <button onclick="startRecording()">Start</button>
+            <button onclick="pauseRecording()">Pause</button>
+            <button onclick="stopRecording()">Stop</button>
+            <p>Status: <span id="recording-status">Idle</span></p>
+
+            <h2>Project</h2>
+            <input type="text" id="project-name" placeholder="Project name">
+            <label><input type="checkbox" id="save-sd" checked> Save to SD</label>
+            <label><input type="checkbox" id="save-db" checked> Save to DB</label>
+            <button onclick="newProject()">New Project</button>
+
+            <h2>OTA & Network</h2>
+            <button onclick="restartEsp()">Restart ESP32</button>
+            <button onclick="switchMode('ap')">Switch to AP Mode</button>
+            <button onclick="switchMode('sta')">Switch to STA Mode</button>
+            <h3>Network Config</h3>
+            <input type="text" id="ap-ssid" placeholder="AP SSID">
+            <input type="password" id="ap-password" placeholder="AP Password">
+            <input type="text" id="sta-ssid" placeholder="STA SSID">
+            <input type="password" id="sta-password" placeholder="STA Password">
+            <button onclick="updateNetwork()">Update Network</button>
+
+            <h2>Change Password</h2>
+            <input type="password" id="old-password" placeholder="Old password">
+            <input type="password" id="new-password" placeholder="New password">
+            <button onclick="changePassword()">Change Password</button>
+
+            <p id="admin-message"></p>
+        </div>
+    </main>
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/admin.js"></script>
+</body>
+</html>

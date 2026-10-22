@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Engine Cooling Dashboard</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <header>
+        <h1>Engine Cooling Monitor</h1>
+        <nav>
+            <a href="/">Dashboard</a>
+            <a href="/admin">Admin</a>
+        </nav>
+    </header>
+
+    <main>
+        <section class="live-values">
+            <div class="card"><span>Radiator Inlet</span><strong id="radiatorInlet">--</strong> °C</div>
+            <div class="card"><span>Radiator Outlet</span><strong id="radiatorOutlet">--</strong> °C</div>
+            <div class="card"><span>Engine Inlet</span><strong id="engineInlet">--</strong> °C</div>
+            <div class="card"><span>Ambient</span><strong id="ambientTemp">--</strong> °C</div>
+            <div class="card"><span>RPM</span><strong id="rpm">--</strong></div>
+            <div class="card"><span>Fan Speed</span><strong id="fanSpeed">--</strong></div>
+            <div class="card"><span>Flow Rate</span><strong id="flowRate">--</strong> L/min</div>
+            <div class="card"><span>Efficiency</span><strong id="efficiency">--</strong> %</div>
+            <div class="card"><span>Cooling Rate</span><strong id="coolingRate">--</strong> °C</div>
+            <div class="card"><span>Heat Dissipation (Q)</span><strong id="heatDissipation">--</strong> W</div>
+            <div class="card"><span>Temp Rate</span><strong id="tempRateOfChange">--</strong> °C/s</div>
+            <div class="card"><span>Radiator ΔT</span><strong id="radiatorTempDiff">--</strong> °C</div>
+        </section>
+
+        <section class="charts-grid">
+            <div class="chart-container"><canvas id="tempVsTime"></canvas></div>
+            <div class="chart-container"><canvas id="tempVsRpm"></canvas></div>
+            <div class="chart-container"><canvas id="qVsTime"></canvas></div>
+            <div class="chart-container"><canvas id="qVsRpm"></canvas></div>
+            <div class="chart-container"><canvas id="dTdtVsTime"></canvas></div>
+            <div class="chart-container"><canvas id="radiatorDeltaTVsTime"></canvas></div>
+            <div class="chart-container"><canvas id="deltaTVsFlow"></canvas></div>
+            <div class="chart-container"><canvas id="flowVsRpm"></canvas></div>
+        </section>
+    </main>
+
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/dashboard.js"></script>
+</body>
+</html>
