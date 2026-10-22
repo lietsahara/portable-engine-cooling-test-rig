@@ -1,6 +1,6 @@
 const MAX_POINTS = 60;
-const ws = new WebSocket(`ws://${location.host}/ws/dashboard`);
-const charts = {};
+const wsProtocol = location.protocol === 'https:' ? 'wss://' : 'ws://';
+const ws = new WebSocket(`${wsProtocol}${location.host}/ws/dashboard`);const charts = {};
 
 function initChart(id, yLabel, datasets) {
     const ctx = document.getElementById(id).getContext('2d');

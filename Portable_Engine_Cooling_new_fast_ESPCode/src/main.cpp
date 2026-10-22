@@ -69,7 +69,7 @@ bool use_sta = false;
 bool sta_connected = false;
 
 // -------------------- Cloud WebSocket --------------------
-const char* cloud_ws_host = "my-app.koyeb.app"; // replace with your Koyeb host
+const char* cloud_ws_host = "https://portable-engine-cooling-test-rig.onrender.com/"; // tells the esp32 the backend server to connect to
 const int cloud_ws_port = 443;
 const char* cloud_ws_path = "/ws/esp32";
 WebSocketsClient cloudWs;
