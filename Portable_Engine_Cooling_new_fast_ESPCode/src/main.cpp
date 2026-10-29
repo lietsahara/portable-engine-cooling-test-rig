@@ -1,4 +1,4 @@
-#include <WiFi.h>
+!Z#Xrty#include <WiFi.h>
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
 #include <OneWire.h>
@@ -10,14 +10,14 @@
 #include <SD.h>
 #include <SPI.h>
 
-// -------------------- Pin definitions --------------------
+// Pin definitions
 #define DHTPIN 14
 #define SENSOR1 4
 #define SENSOR2 5
 #define SENSOR3 7
-#define SD_CS_PIN 10          // change to your SD card CS pin
+#define SD_CS_PIN 10          
 
-// -------------------- Sensor objects --------------------
+// Sensor objects 
 OneWire oneWire1(SENSOR1);
 OneWire oneWire2(SENSOR2);
 OneWire oneWire3(SENSOR3);
@@ -25,7 +25,7 @@ DallasTemperature sensor1(&oneWire1);
 DallasTemperature sensor2(&oneWire2);
 DallasTemperature sensor3(&oneWire3);
 
-// -------------------- Readings --------------------
+// Readings 
 float radiatorInlet = 0;
 float radiatorOutlet = 0;
 float engineInlet = 0;
@@ -38,7 +38,7 @@ float flowRate = NAN;
 float heatDissipation = NAN;
 float tempRateOfChange = NAN;
 
-// -------------------- Recording state --------------------
+// Recording state
 bool recording = false;
 bool paused = false;
 bool ramRecording = false;
@@ -47,7 +47,7 @@ bool interrupted = false;
 unsigned long lastFlush = 0;
 const unsigned long FLUSH_INTERVAL = 5000;
 
-//-------------------- Restart state --------------------
+// Restart state
 bool pendingRestart = false;
 unsigned long restartAt = 0;
 
@@ -57,7 +57,7 @@ String ramBuffer[RAM_BUFFER_SIZE];
 int ramBufferIndex = 0;
 int ramBufferCount = 0;
 
-// -------------------- Wi-Fi / mode --------------------
+// Wi-Fi / mode 
 const char* default_ap_ssid = "IoT Network";
 const char* default_ap_password = "1_Mpaka_8";
 
@@ -68,27 +68,27 @@ String sta_password = "";
 bool use_sta = false;
 bool sta_connected = false;
 
-// -------------------- Cloud WebSocket --------------------
+// Cloud WebSocket
 const char* cloud_ws_host = "https://portable-engine-cooling-test-rig.onrender.com/"; // tells the esp32 the backend server to connect to
 const int cloud_ws_port = 443;
 const char* cloud_ws_path = "/ws/esp32";
 WebSocketsClient cloudWs;
 bool cloud_ws_connected = false;
 
-// -------------------- Local server --------------------
+//Local server
 AsyncWebServer server(80);
 AsyncWebSocket ws("/ws");
 
-// -------------------- Preferences --------------------
+// Preferences 
 Preferences prefs;
 
-// -------------------- Admin auth --------------------
+// Admin auth 
 String adminPassword = "admin";
 String sessionToken = "";
 unsigned long sessionExpiry = 0;
 const unsigned long SESSION_TIMEOUT = 3600000; // 1 hour
 
-// -------------------- Forward declarations --------------------
+// Forward declarations
 void initWebSocket();
 void initCloudWebSocket();
 void sendSensorData();
@@ -113,7 +113,7 @@ void handleDownload(AsyncWebServerRequest *request);
 void handleEnableRamRecording(AsyncWebServerRequest *request);
 void handleChangePassword(AsyncWebServerRequest *request);
 
-// -------------------- HTML page --------------------
+// HTML page
 const char index_html[] PROGMEM = R"rawliteral(
 <!DOCTYPE HTML><html>
 <head>
@@ -391,7 +391,8 @@ function saveNetwork() {
 </html>
 )rawliteral";
 
-// -------------------- Local WebSocket event --------------------
+// Local WebSocket event
+//uses the EspAsyncWebServer library for the esp32 server (local browser connected to the esp32)
 void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client,
              AwsEventType type, void *arg, uint8_t *data, size_t len) {
   switch (type) {
@@ -404,6 +405,9 @@ void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client,
     case WS_EVT_DATA:
       Serial.println("Data from local browser");
       break;
+    case WS_EVT_ERROR:
+      Serial.printf("WS error: %s\n", (char*)data);  // data is the error message here
+      break;
     default:
       break;
   }
@@ -414,19 +418,20 @@ void initWebSocket() {
   server.addHandler(&ws);
 }
 
-// -------------------- Cloud WebSocket event --------------------
+// Cloud WebSocket event
+//uses arduinoWebsockets library for the esp32 client connected to cloud server
 void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
   switch (type) {
     case WStype_DISCONNECTED:
       cloud_ws_connected = false;
-      Serial.println("[CloudWS] Disconnected");
+      Serial.println("[CloudWS] Disconnected");//CloudWs is a log type prefix to distinguish between local and cloud websocket logs
       break;
     case WStype_CONNECTED:
       cloud_ws_connected = true;
       Serial.println("[CloudWS] Connected");
       break;
     case WStype_TEXT: {
-      Serial.printf("[CloudWS] Received: %s\n", payload);
+      Serial.printf("[CloudWS] Received: %.*s\n", (int)length, (const char*)payload);
       JsonDocument doc;
       DeserializationError err = deserializeJson(doc, payload, length);
       if (err) {
@@ -434,10 +439,20 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
         Serial.println(err.c_str());
         return;
       }
+      if (!doc.is<JsonObject>()) {
+        Serial.println("[CloudWS] Expected object,JSON is not an object");
+        return;
+      }
       JsonObject obj = doc.as<JsonObject>();
       handleCommand(obj);
       break;
     }
+    case WStype_ERROR:
+      Serial.println("[CloudWS] Error");
+      break;
+    case WStype_BIN://not using, will be ignored safely
+      Serial.println("[CloudWS] Binary data received (not handled)");
+      break;
     default:
       break;
   }
@@ -447,12 +462,12 @@ void initCloudWebSocket() {
   cloudWs.beginSSL(cloud_ws_host, cloud_ws_port, cloud_ws_path);
   cloudWs.onEvent(webSocketEvent);
   cloudWs.setReconnectInterval(5000);
-  cloudWs.enableHeartbeat(15000, 3000, 2);
+  cloudWs.enableHeartbeat(15000, 3000, 2);//wait 15 seconds before sending a ping, wait 3 seconds for a pong, and retry 2 times before disconnecting i.e to detect silent deaths
 }
 
-// -------------------- Cloud command handling --------------------
+// Cloud command handling
 void handleCommand(JsonObject doc) {
-  const char* cmd = doc["command"];
+  const char* cmd = doc["command"];//pointer to doc address
   if (!cmd) return;
 
   Serial.print("[CloudWS] Command: ");
@@ -478,14 +493,14 @@ void handleCommand(JsonObject doc) {
     Serial.printf("New project: %s (SD=%d, DB=%d)\n", name, save_sd, save_db);
   } else if (strcmp(cmd, "restart") == 0) {
     Serial.println("Restarting...");
-    delay(200);
-    ESP.restart();
+    pendingRestart = true;
+    restartAt = millis() + 1000;
   } else if (strcmp(cmd, "switch_mode") == 0) {
     const char* mode = doc["mode"];
     prefs.putBool("use_sta", mode && strcmp(mode, "sta") == 0);
     Serial.println("Switching mode and restarting...");
-    delay(200);
-    ESP.restart();
+    pendingRestart = true;
+    restartAt = millis() + 1000;
   } else if (strcmp(cmd, "network_config") == 0) {
     const char* ap_ssid_in = doc["ap_ssid"] | "";
     const char* ap_password_in = doc["ap_password"] | "";
@@ -493,35 +508,31 @@ void handleCommand(JsonObject doc) {
     const char* sta_password_in = doc["sta_password"] | "";
     saveNetworkConfig(ap_ssid_in, ap_password_in, sta_ssid_in, sta_password_in);
     Serial.println("Network config saved. Restarting...");
-    delay(200);
-    ESP.restart();
+    pendingRestart = true;
+    restartAt = millis() + 1000;
   }
 }
 
-// -------------------- Preferences --------------------
+// Preferences
 void loadPreferences() {
-  prefs.begin("engine", false);
   ap_ssid = prefs.getString("ap_ssid", default_ap_ssid);
   ap_password = prefs.getString("ap_password", default_ap_password);
   sta_ssid = prefs.getString("sta_ssid", "");
   sta_password = prefs.getString("sta_password", "");
   use_sta = prefs.getBool("use_sta", false);
-  adminPassword = prefs.getString("admin_pwd", "admin");
+  adminPassword = prefs.getString("admin_pwd", "can'tCatchMe");
   interrupted = prefs.getBool("was_recording", false);
-  prefs.end();
 }
 
 void saveNetworkConfig(const char* ap_ssid_in, const char* ap_password_in,
                        const char* sta_ssid_in, const char* sta_password_in) {
-  prefs.begin("engine", false);
   if (strlen(ap_ssid_in) > 0) prefs.putString("ap_ssid", ap_ssid_in);
   if (strlen(ap_password_in) > 0) prefs.putString("ap_password", ap_password_in);
   if (strlen(sta_ssid_in) > 0) prefs.putString("sta_ssid", sta_ssid_in);
   if (strlen(sta_password_in) > 0) prefs.putString("sta_password", sta_password_in);
-  prefs.end();
 }
 
-// -------------------- Wi-Fi modes --------------------
+// Wi-Fi modes
 void startAPMode() {
   WiFi.softAP(ap_ssid.c_str(), ap_password.c_str());
   Serial.print("AP IP: ");
@@ -556,7 +567,7 @@ void trySTAMode() {
   }
 }
 
-// -------------------- SD helpers --------------------
+// SD helpers
 String getTimestamp() {
   return String(millis());
 }
@@ -578,7 +589,7 @@ void writeToRAM(String line) {
   if (ramBufferCount < RAM_BUFFER_SIZE) ramBufferCount++;
 }
 
-// -------------------- Admin auth --------------------
+// Admin auth
 bool checkAuth(AsyncWebServerRequest *request) {
   if (sessionToken == "") return false;
   if (millis() > sessionExpiry) {
@@ -588,7 +599,7 @@ bool checkAuth(AsyncWebServerRequest *request) {
   String token = "";
   if (request->hasHeader("Authorization")) {
     token = request->getHeader("Authorization")->value();
-    token.replace("Bearer ", "");
+    if (token.startsWith("Bearer ")) token = token.substring(7);
   } else if (request->hasParam("token")) {
     token = request->getParam("token")->value();
   }
@@ -657,8 +668,10 @@ void handleSwitchMode(AsyncWebServerRequest *request) {
   String mode = request->getParam("mode", true)->value();
   prefs.putBool("use_sta", mode == "sta");
   request->send(200, "application/json", "{\"status\":\"switching mode\"}");
-  delay(200);
-  ESP.restart();
+   // Don't restart inside the handler - let loop() do it
+   //having delay (200) ESP.restart() inside the handler blocks the server for 200ms then reboots mid-handler
+  pendingRestart = true;
+  restartAt = millis() + 1000;
 }
 
 void handleNetworkConfig(AsyncWebServerRequest *request) {
@@ -691,7 +704,7 @@ void handleNetworkConfig(AsyncWebServerRequest *request) {
     if (v.length() > 0) prefs.putString("sta_password", v);
   }
 
-  // If the admin gave an STA SSID, enable STA mode
+  // If the admin gives an STA SSID, enable STA mode
   if (staProvided) {
     prefs.putBool("use_sta", true);
   }
@@ -702,11 +715,10 @@ void handleNetworkConfig(AsyncWebServerRequest *request) {
                 prefs.getString("ap_ssid", "").c_str(),
                 prefs.getString("sta_ssid", "").c_str());
 
-  prefs.end();
 
   request->send(200, "application/json", "{\"status\":\"network config saved, restarting\"}");
 
-  // Don't restart inside the handler — let loop() do it
+  // Don't restart inside the handler - let loop() do it
   pendingRestart = true;
   restartAt = millis() + 1000;
 }
@@ -729,13 +741,11 @@ void handleDownload(AsyncWebServerRequest *request) {
     request->send(400, "application/json", "{\"error\":\"no SD card\"}");
     return;
   }
-  File file = SD.open("/experiment.csv", FILE_READ);
-  if (!file) {
+  if (!SD.exists("/experiment.csv")) { // check instead of open
     request->send(404, "application/json", "{\"error\":\"file not found\"}");
     return;
   }
-  request->send(file, "/experiment.csv", String("text/csv"), true);
-  file.close();
+  request->send(SD, "/experiment.csv", "text/csv", true); // server opens/closes it
 }
 
 void handleChangePassword(AsyncWebServerRequest *request) {
@@ -762,14 +772,13 @@ void handleChangePassword(AsyncWebServerRequest *request) {
   adminPassword = newPwd;
   prefs.begin("engine", false);
   prefs.putString("admin_pwd", adminPassword);
-  prefs.end();
-
+ 
   sessionToken = "";  // force re-login
 
   request->send(200, "application/json", "{\"status\":\"password changed, please log in again\"}");
 }
 
-// -------------------- Sensor JSON --------------------
+// Sensor JSON
 void sendSensorData() {
   JsonDocument doc;
   doc["radiatorInlet"] = radiatorInlet;
@@ -802,8 +811,9 @@ void sendSensorData() {
   }
 }
 
-// -------------------- Setup --------------------
+// Setup
 void setup() {
+  randomSeed(esp_random());//to ensure every boot has a different random seed for session tokens and other random values
   Serial.begin(115200);
 
   sensor1.begin();
@@ -822,6 +832,9 @@ void setup() {
     Serial.println("SD card failed or not present");
   }
 
+  prefs.begin("engine", false);//initialize preferences with namespace "engine"
+  //added to ensure that preferences are loaded before any network or recording operations
+  //removed redundant prefs.begin from loadPreferences and handleNetworkConfig
   loadPreferences();
 
   if (interrupted) {
@@ -858,7 +871,7 @@ void setup() {
   }
 }
 
-// -------------------- Loop --------------------
+// Loop
 void loop() {
   if (pendingRestart && millis() > restartAt) {
   ESP.restart();
