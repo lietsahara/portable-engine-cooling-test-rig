@@ -44,8 +44,6 @@ bool paused = false;
 bool ramRecording = false;
 bool sdAvailable = false;
 bool interrupted = false;
-unsigned long lastFlush = 0;
-const unsigned long FLUSH_INTERVAL = 5000;
 
 // Restart state
 bool pendingRestart = false;
@@ -820,7 +818,7 @@ void setup() {
   sensor2.begin();
   sensor3.begin();
 
-  if (!LittleFS.begin(true)) {
+  if (!LittleFS.begin(true)) { //true here automatically formats the filesystem if it fails to mount, which is useful for first-time setup or after a corruption
     Serial.println("LittleFS failed!");
   }
 
@@ -847,13 +845,16 @@ void setup() {
 
   initWebSocket();
 
+  //server.on redisters HTTP GET and POST handlers for various endpoints
+  // it also serves the main HTML page and the chart.js file from LittleFS
+  //and handles API requests for recording control, mode switching, network configuration, RAM recording, password change, and data download
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
     request->send(200, "text/html", index_html);
   });
   server.on("/chart.js", HTTP_GET, [](AsyncWebServerRequest *request) {
     request->send(LittleFS, "/chart.js", "application/javascript");
   });
-  server.on("/login", HTTP_POST, handleLogin);
+  server.on("/login", HTTP_POST, handleLogin);//1. route/endpoint 2. HTTP method 3. handler function
   server.on("/api/recording/start", HTTP_POST, handleStartRecording);
   server.on("/api/recording/pause", HTTP_POST, handlePauseRecording);
   server.on("/api/recording/stop", HTTP_POST, handleStopRecording);
@@ -863,10 +864,10 @@ void setup() {
   server.on("/api/change-password", HTTP_POST, handleChangePassword);
   server.on("/download", HTTP_GET, handleDownload);
 
-  server.begin();
+  server.begin();//start the local webserver
   Serial.println("Local webserver started");
 
-  if (sta_connected) {
+  if (sta_connected) {//if in sta mode and connected to the cloud, initialize the cloud websocket
     initCloudWebSocket();
   }
 }
@@ -880,18 +881,18 @@ void loop() {
   static float lastEngineInlet = NAN;
   static unsigned long lastEngineTime = 0;
 
-  if (sta_connected) {
-    cloudWs.loop();
+  if (sta_connected) {      //check wether the esp32 is connected to the cloud server in STA mode
+    cloudWs.loop();         //keep the cloud websocket alive and handle incoming messages
   }
 
-  if (millis() - lastTime >= 1000) {
+  if (millis() - lastTime >= 1000) {//check if 1 second has passed since the last sensor reading
     lastTime = millis();
 
-    sensor1.requestTemperatures();
+    sensor1.requestTemperatures();//request temperature readings from the sensors
     sensor2.requestTemperatures();
     sensor3.requestTemperatures();
 
-    // Uncomment when real sensors are connected:
+    // will be uncommented when real sensors are connected:
     // radiatorInlet = sensor1.getTempCByIndex(0);
     // radiatorOutlet = sensor2.getTempCByIndex(0);
     // engineInlet = sensor3.getTempCByIndex(0);
@@ -904,18 +905,18 @@ void loop() {
     coolingRate = radiatorInlet - radiatorOutlet;
     radiatorTempDiff = radiatorInlet - radiatorOutlet;
 
-    if (!isnan(lastEngineInlet)) {
+    if (!isnan(lastEngineInlet)) {//check if lastEngineInlet is a valid number before calculating the rate of change
       unsigned long now = millis();
-      float dt = (now - lastEngineTime) / 1000.0;
+      float dt = (now - lastEngineTime) / 1000.0;//convert milliseconds to seconds
       if (dt > 0) {
         tempRateOfChange = (engineInlet - lastEngineInlet) / dt;
       }
     }
-    lastEngineInlet = engineInlet;
+    lastEngineInlet = engineInlet;//store the current engine inlet temperature for the next iteration
     lastEngineTime = millis();
 
     if (!isnan(flowRate) && flowRate > 0) {
-      const float Cp = 4180.0;
+      const float Cp = 4180.0;//specific heat capacity of water in J/(kg·°C)
       heatDissipation = flowRate * Cp * (radiatorInlet - radiatorOutlet);
     } else {
       heatDissipation = NAN;
@@ -939,10 +940,6 @@ void loop() {
       } else if (ramRecording) {
         writeToRAM(line);
       }
-    }
-
-    if (recording && !paused && sdAvailable && millis() - lastFlush > FLUSH_INTERVAL) {
-      lastFlush = millis();
     }
 
     sendSensorData();
