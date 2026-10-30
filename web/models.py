@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from sqlmodel import Field, SQLModel
 
@@ -15,7 +15,7 @@ class EngineDataBase(SQLModel):
     heat_dissipation: Optional[float] = Field(default=None, index=True)
     temp_rate_of_change: Optional[float] = Field(default=None, index=True)
     radiator_temp_diff: Optional[float] = Field(default=None, index=True)
-    timestamp: datetime = Field(default_factory=datetime.utcnow, index=True)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), index=True)
 
 class EngineData(EngineDataBase, table=True):
     id: int | None = Field(default=None, primary_key=True)

@@ -1,4 +1,4 @@
-!Z#Xrty#include <WiFi.h>
+#include <WiFi.h>
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
 #include <OneWire.h>
@@ -9,6 +9,11 @@
 #include <Preferences.h>
 #include <SD.h>
 #include <SPI.h>
+#include <HTTPClient.h>//used only by testRenderHTTPS() diagnostic below
+
+// Diagnostic: set to 1 to test plain HTTPS to the cloud host on every boot.
+// Useful for diagnosing TLS errors (-80, -1). Set back to 0 for normal use.
+#define DEBUG_HTTPS_TEST 0
 
 // Pin definitions
 #define DHTPIN 14
@@ -67,7 +72,7 @@ bool use_sta = false;
 bool sta_connected = false;
 
 // Cloud WebSocket
-const char* cloud_ws_host = "https://portable-engine-cooling-test-rig.onrender.com/"; // tells the esp32 the backend server to connect to
+const char* cloud_ws_host = "portable-engine-cooling-test-rig.onrender.com"; // tells the esp32 the backend server to connect to
 const int cloud_ws_port = 443;
 const char* cloud_ws_path = "/ws/esp32";
 WebSocketsClient cloudWs;
@@ -129,13 +134,13 @@ const char index_html[] PROGMEM = R"rawliteral(
 <h1>Engine Cooling Monitor</h1>
 <p class="status">Status: <span id='apStatus'>--</span> | <span id='staStatus'>--</span> | <span id='cloudStatus'>--</span> | <span id='sdStatus'>--</span> | <span id='recStatus'>--</span></p>
 
-<p>Radiator Inlet: <span id='radiatorInlet'>__</span> °C</p>
-<p>Radiator Outlet: <span id='radiatorOutlet'>__</span> °C</p>
-<p>Engine Inlet: <span id='engineInlet'>__</span> °C</p>
-<p>Cooling Rate: <span id='coolingRate'>__</span> °C</p>
+<p>Radiator Inlet: <span id='radiatorInlet'>__</span> C</p>
+<p>Radiator Outlet: <span id='radiatorOutlet'>__</span> C</p>
+<p>Engine Inlet: <span id='engineInlet'>__</span> C</p>
+<p>Cooling Rate: <span id='coolingRate'>__</span> C</p>
 <p>Heat Dissipation Q: <span id='heatDissipation'>__</span> W</p>
-<p>Radiator ΔT: <span id='radiatorTempDiff'>__</span> °C</p>
-<p>Temp Rate of Change: <span id='tempRateOfChange'>__</span> °C/s</p>
+<p>Radiator ΔT: <span id='radiatorTempDiff'>__</span> C</p>
+<p>Temp Rate of Change: <span id='tempRateOfChange'>__</span> C/s</p>
 
 <!-- Charts -->
 <h2>Temperature vs Time</h2>
@@ -261,7 +266,8 @@ websocket.onmessage = function(event) {
   if (data.tempRateOfChange !== null) addPoint(dTdtVsTime, label, [data.tempRateOfChange]);
 };
 
-// ---------- Admin JS ----------
+// ##### Admin JS #####
+
 function getToken() { return localStorage.getItem('admin_token'); }
 function setToken(t) { localStorage.setItem('admin_token', t); }
 function clearToken() { localStorage.removeItem('admin_token'); }
@@ -411,6 +417,29 @@ void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client,
   }
 }
 
+  //Testing HTTPS connection to the cloud server since i got a -80 error
+  //##########
+#if DEBUG_HTTPS_TEST
+void testRenderHTTPS() {
+  WiFiClientSecure client;
+  client.setInsecure();  // diagnostic only not for use with real data
+
+  HTTPClient https;
+  https.begin(client, "https://portable-engine-cooling-test-rig.onrender.com/");
+  int code = https.GET();
+  Serial.printf("[HTTPS test] code=%d\n", code);
+  https.end();
+
+  // Optional: comparing with a known good host to tell "network blocks TLS"
+  // from "network blocks Render specifically"
+  https.begin(client, "https://www.google.com/");
+  code = https.GET();
+  Serial.printf("[HTTPS google.com] code=%d\n", code);
+  https.end();
+}
+#endif
+//############
+
 void initWebSocket() {
   ws.onEvent(onEvent);
   server.addHandler(&ws);
@@ -460,7 +489,7 @@ void initCloudWebSocket() {
   cloudWs.beginSSL(cloud_ws_host, cloud_ws_port, cloud_ws_path);
   cloudWs.onEvent(webSocketEvent);
   cloudWs.setReconnectInterval(5000);
-  cloudWs.enableHeartbeat(15000, 3000, 2);//wait 15 seconds before sending a ping, wait 3 seconds for a pong, and retry 2 times before disconnecting i.e to detect silent deaths
+  cloudWs.enableHeartbeat(60000, 3000, 2);//wait 60 seconds before sending a ping, wait 3 seconds for a pong, and retry 2 times before disconnecting i.e to detect silent deaths
 }
 
 // Cloud command handling
@@ -779,7 +808,9 @@ void handleChangePassword(AsyncWebServerRequest *request) {
 // Sensor JSON
 void sendSensorData() {
   JsonDocument doc;
-  doc["radiatorInlet"] = radiatorInlet;
+  //store the sensor readings and other relevant data in the JSON document
+  //1. sensor readings and calculated values
+  doc["radiatorInlet"] = radiatorInlet;   //store the radiatorInlet value in the JSON document with key "radiatorInlet"
   doc["radiatorOutlet"] = radiatorOutlet;
   doc["engineInlet"] = engineInlet;
   doc["ambientTemp"] = ambientTemp;
@@ -792,8 +823,10 @@ void sendSensorData() {
   doc["radiatorTempDiff"] = radiatorTempDiff;
 
   String baseJson;
-  serializeJson(doc, baseJson);
+  // serialize the JSON document into a string for sending to the cloud server
+  serializeJson(doc, baseJson); //#snapshot 1 SENSOR-ONLY
 
+  //2. status flags
   doc["ap_active"] = true;
   doc["sta_connected"] = sta_connected;
   doc["cloud_connected"] = cloud_ws_connected;
@@ -801,7 +834,8 @@ void sendSensorData() {
   doc["recording"] = recording;
   doc["paused"] = paused;
   String localJson;
-  serializeJson(doc, localJson);
+  serializeJson(doc, localJson);//#snapshot 2 SENSOR+STATUS
+  //send the JSON string to all connected local web clients via the local websocket
   ws.textAll(localJson);
 
   if (cloud_ws_connected) {
@@ -843,6 +877,7 @@ void setup() {
   startAPMode();
   trySTAMode();
 
+
   initWebSocket();
 
   //server.on redisters HTTP GET and POST handlers for various endpoints
@@ -868,6 +903,11 @@ void setup() {
   Serial.println("Local webserver started");
 
   if (sta_connected) {//if in sta mode and connected to the cloud, initialize the cloud websocket
+
+    #if DEBUG_HTTPS_TEST
+    testRenderHTTPS(); 
+    #endif      // diagnostic
+
     initCloudWebSocket();
   }
 }
