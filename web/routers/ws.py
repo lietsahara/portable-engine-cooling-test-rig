@@ -7,8 +7,10 @@ from schemas import Esp32Data
 from ws_manager import manager
 
 from starlette.websockets import WebSocketState
+import json
 
 router = APIRouter(tags=["websocket"])
+
 
 @router.websocket("/ws/esp32")
 async def websocket_esp32(websocket: WebSocket):
@@ -18,14 +20,12 @@ async def websocket_esp32(websocket: WebSocket):
         while True:
             try:
                 data = await websocket.receive_json()
-            except WebSocketDisconnect:
-                break
-            except Exception as e:
-                print(f"[ESP32 WS] receive error: {type(e).__name__}: {e}")
-                # If the socket is already closed, stop looping
-                if websocket.client_state != WebSocketState.CONNECTED:
-                    break
+            except json.JSONDecodeError as e:
+                print(f"[ESP32 WS] bad JSON: {e}")
                 continue
+            except Exception as e:
+                print(f"[ESP32 WS] disconnected: {type(e).__name__}: {e}")
+                break
 
             try:
                 payload = Esp32Data(**data)
