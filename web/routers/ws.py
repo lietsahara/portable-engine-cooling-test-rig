@@ -6,6 +6,8 @@ from models import EngineData
 from schemas import Esp32Data
 from ws_manager import manager
 
+from starlette.websockets import WebSocketState
+
 router = APIRouter(tags=["websocket"])
 
 @router.websocket("/ws/esp32")
@@ -16,10 +18,15 @@ async def websocket_esp32(websocket: WebSocket):
         while True:
             try:
                 data = await websocket.receive_json()
-                print(f"[ESP32 WS] got message, keys={list(data.keys())}")
+            except WebSocketDisconnect:
+                break
             except Exception as e:
                 print(f"[ESP32 WS] receive error: {type(e).__name__}: {e}")
+                # If the socket is already closed, stop looping
+                if websocket.client_state != WebSocketState.CONNECTED:
+                    break
                 continue
+
             try:
                 payload = Esp32Data(**data)
                 with Session(engine) as session:
@@ -39,15 +46,15 @@ async def websocket_esp32(websocket: WebSocket):
                     session.add(db_data)
                     session.commit()
                     session.refresh(db_data)
-                    print(f"[ESP32 WS] stored id={db_data.id}, broadcasting")
+                    print(f"[ESP32 WS] stored id={db_data.id}")
                     await manager.broadcast(db_data.model_dump())
             except Exception as e:
                 print(f"[ESP32 WS] processing error: {type(e).__name__}: {e}")
     except WebSocketDisconnect:
+        pass
+    finally:
         print("[ESP32 WS] client disconnected")
         manager.disconnect_esp32()
-    except Exception as e:
-        print(f"[ESP32 WS] handler exception: {type(e).__name__}: {e}")
 
 @router.websocket("/ws/dashboard")
 async def websocket_dashboard(websocket: WebSocket):
