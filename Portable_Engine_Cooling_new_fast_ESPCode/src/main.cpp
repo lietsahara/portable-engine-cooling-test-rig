@@ -488,7 +488,7 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
 void initCloudWebSocket() {
   cloudWs.beginSSL(cloud_ws_host, cloud_ws_port, cloud_ws_path);
   cloudWs.onEvent(webSocketEvent);
-  cloudWs.setReconnectInterval(5000);
+  cloudWs.setReconnectInterval(2000);
   cloudWs.enableHeartbeat(60000, 3000, 2);//wait 60 seconds before sending a ping, wait 3 seconds for a pong, and retry 2 times before disconnecting i.e to detect silent deaths
 }
 
@@ -813,13 +813,16 @@ void sendSensorData() {
   doc["radiatorInlet"] = radiatorInlet;   //store the radiatorInlet value in the JSON document with key "radiatorInlet"
   doc["radiatorOutlet"] = radiatorOutlet;
   doc["engineInlet"] = engineInlet;
-  doc["ambientTemp"] = ambientTemp;
-  doc["rpm"] = rpm;
-  doc["fanSpeed"] = fanSpeed;
-  doc["flowRate"] = flowRate;
+
+  // Explicit nulls instead of NaN
+  if (isnan(ambientTemp))      doc["ambientTemp"] = nullptr;      else doc["ambientTemp"] = ambientTemp;
+  if (isnan(rpm))              doc["rpm"] = nullptr;              else doc["rpm"] = rpm;
+  if (isnan(fanSpeed))         doc["fanSpeed"] = nullptr;         else doc["fanSpeed"] = fanSpeed;
+  if (isnan(flowRate))         doc["flowRate"] = nullptr;         else doc["flowRate"] = flowRate;
+  if (isnan(heatDissipation))  doc["heatDissipation"] = nullptr;  else doc["heatDissipation"] = heatDissipation;
+  if (isnan(tempRateOfChange)) doc["tempRateOfChange"] = nullptr; else doc["tempRateOfChange"] = tempRateOfChange;
+
   doc["coolingRate"] = coolingRate;
-  doc["heatDissipation"] = heatDissipation;
-  doc["tempRateOfChange"] = tempRateOfChange;
   doc["radiatorTempDiff"] = radiatorTempDiff;
 
   String baseJson;

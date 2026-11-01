@@ -19,7 +19,6 @@ async def create_sensor_data(payload: Esp32Data, session: SessionDep):
         rpm=payload.rpm,
         fan_speed=payload.fanSpeed,
         flow_rate=payload.flowRate,
-        efficiency=payload.efficiency,
         cooling_rate=payload.coolingRate,
         heat_dissipation=payload.heatDissipation,
         temp_rate_of_change=payload.tempRateOfChange,
