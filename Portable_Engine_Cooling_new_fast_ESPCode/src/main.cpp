@@ -11,16 +11,31 @@
 #include <SPI.h>
 #include <HTTPClient.h>//used only by testRenderHTTPS() diagnostic below
 
+
+//ENABLE/DISABLE SWITCHES
 // Diagnostic: set to 1 to test plain HTTPS to the cloud host on every boot.
 // Useful for diagnosing TLS errors (-80, -1). Set back to 0 for normal use.
 #define DEBUG_HTTPS_TEST 0
+//Diagnostic: for testing without actual sensors connected. Set to 1 to use dummy values for testing the web interface and cloud connection without real sensors.
+//NB: SET TO 0 WHEN SENSORS ARE TO BE USED
+#define USE_DUMMY_VALUES 1
+//SENSOR ENABLE SWITCHES
+// Set to 1 to enable, 0 to disable. Disabled sensors send null.
+#define ENABLE_DS18B20_SENSORS   0
+#define ENABLE_NTC_SENSOR        0
+#define ENABLE_FLOW_SENSOR       0
+#define ENABLE_FAN_SENSOR        0
 
-// Pin definitions
-#define DHTPIN 14
+// Defining Sensor pins
 #define SENSOR1 4
 #define SENSOR2 5
 #define SENSOR3 7
-#define SD_CS_PIN 10          
+#define SD_CS_PIN 9
+
+#define NTC_SENSOR 2 //for the engine inlet sensor
+#define FLOW_SENSOR 40
+#define FAN_HALLEFFECT 3
+
 
 // Sensor objects 
 OneWire oneWire1(SENSOR1);
@@ -42,6 +57,25 @@ float fanSpeed = NAN;
 float flowRate = NAN;
 float heatDissipation = NAN;
 float tempRateOfChange = NAN;
+
+// NTC CURVE CONSTANTS
+// From NTC datasheet. Fill NTC_LOW_R / NTC_HIGH_R with the actual
+// resistance values at the two calibration temperatures.
+const float NTC_VIN              = 3.3;
+const float NTC_FIXED_RESISTOR   = 300.0;
+const float NTC_R0               = 300.0; // resistance at T0
+const float NTC_T0_KELVIN        = 353.0; // 80 degC
+const float NTC_LOW_T_KELVIN     = 273.0; // 0 degC calibration point
+const float NTC_HIGH_T_KELVIN    = 373.0; // 100 degC calibration point
+const float NTC_LOW_R            = 1.0;   // placeholder: determine thermistor resistance from curve
+const float NTC_HIGH_R           = 2.0;   // placeholder :use curve
+// Computed in setup()
+float ntcBeta                 = 0.0;
+float ntcResistanceAtInfinity = 0.0;
+
+// flow & fan counters
+volatile unsigned long flowPulseCount = 0;
+volatile unsigned long fanPulseCount  = 0;
 
 // Recording state
 bool recording = false;
@@ -117,6 +151,11 @@ void handleNetworkConfig(AsyncWebServerRequest *request);
 void handleDownload(AsyncWebServerRequest *request);
 void handleEnableRamRecording(AsyncWebServerRequest *request);
 void handleChangePassword(AsyncWebServerRequest *request);
+// sensor helpers
+float readNTCTemperature();
+void  updateFlowAndFanPulses();
+void IRAM_ATTR flowISR();//Interrupt Service Routine for flow sensor to check for pulses
+void IRAM_ATTR fanISR();//IRAM -Internal RAM attribute to place the ISR in IRAM for faster execution instead of using the slower flash memory
 
 // HTML page
 const char index_html[] PROGMEM = R"rawliteral(
@@ -441,6 +480,10 @@ void testRenderHTTPS() {
 }
 #endif
 //############
+
+void IRAM_ATTR flowISR() { flowPulseCount++; }//interrupt function, counts flow pulses
+void IRAM_ATTR fanISR()  { fanPulseCount++;  }
+
 
 void initWebSocket() {
   ws.onEvent(onEvent);
@@ -874,15 +917,87 @@ void sendSensorData() {
   }
 }
 
+//sensor functions and calculations
+// NTC engine inlet temperature sensor reading and conversion to Celsius using the Steinhart-Hart equation
+float readNTCTemperature() {
+  int raw = analogRead(NTC_SENSOR);
+  // ESP32-S3 ADC is 12-bit (0..4095). If you call analogReadResolution()
+  // with a different value, update this divisor to match.
+  float vout = NTC_VIN * ((float)raw / 4095.0);
+  if (vout <= 0.01 || vout >= NTC_VIN - 0.01) return NAN;//checks if voltage is 0 or maximum
+                                                        //0 means the thermistor is shorted, and maximum means the thermistor is open, both are invalid readings
+                                                        //0.01 and NTC_VIN-0.01 are used as a tolerance buffer as the ADC may not read exactly 0 or NTC_VIN due to noise or other factors
+
+  float rThermistor = (NTC_FIXED_RESISTOR * vout) / (NTC_VIN - vout);
+  if (rThermistor <= 0.0) return NAN;
+
+  // Steinhart-Hart (beta form): T = beta / ln(R / R_inf)
+  float tempK = ntcBeta / log(rThermistor / ntcResistanceAtInfinity);
+  return tempK - 273.15;
+}
+
+// Flow rate + fan RPM over the last 1 second
+void updateFlowAndFanPulses() {
+  // Snapshot/store then reset the volatile counters atomically(i.e ignoring any interrupts/ incoming flow pulses).
+  // to prevent data corruption due to concurrent access from the interrupt service routines (ISRs) that update these counters.
+  noInterrupts();
+  unsigned long flowCopy = flowPulseCount;
+  unsigned long fanCopy  = fanPulseCount;
+  flowPulseCount = 0;
+  fanPulseCount  = 0;
+  interrupts();
+
+  #if ENABLE_FLOW_SENSOR
+    //pulse frequency(Hz) YF-S201-style =7.5Q, Qis the flowrate in l/min
+    //pulse frequency changes with different flowsensors
+    flowRate = (flowCopy * 60.0) / 7.5;   //(Pulse frequency x 60 min) / 7.5Q = flowrate in L/hour
+  #endif
+
+  #if ENABLE_FAN_SENSOR
+    //calculating fan RPM/determining state
+    // One pulse per revolution
+    fanSpeed = fanCopy * 60.0;  // RPM
+  #endif
+}
+
+
 
 // Setup
 void setup() {
   randomSeed(esp_random());//to ensure every boot has a different random seed for session tokens and other random values
   Serial.begin(115200);
 
+
+  // setting up sensors and interrupts for flow and fan sensors, and calculating NTC parameters if enabled
+  #if ENABLE_NTC_SENSOR
+    ntcBeta = log(NTC_LOW_R / NTC_HIGH_R) /((1.0 / NTC_LOW_T_KELVIN) - (1.0 / NTC_HIGH_T_KELVIN));
+    ntcResistanceAtInfinity = NTC_R0 * exp(-ntcBeta / NTC_T0_KELVIN);
+    analogReadResolution(12);   // must match /4095.0 in readNTCTemperature()
+    Serial.printf("NTC beta=%.2f  R_inf=%.2f\n", ntcBeta, ntcResistanceAtInfinity);
+  #endif
+
+  #if ENABLE_FLOW_SENSOR
+    pinMode(FLOW_SENSOR, INPUT_PULLUP);
+    attachInterrupt(digitalPinToInterrupt(FLOW_SENSOR), flowISR, RISING);
+    Serial.printf("Flow sensor on GPIO %d\n", FLOW_SENSOR);
+  #endif
+
+  #if ENABLE_FAN_SENSOR
+    pinMode(FAN_HALLEFFECT, INPUT_PULLUP);
+    attachInterrupt(digitalPinToInterrupt(FAN_HALLEFFECT), fanISR, RISING);
+    Serial.printf("Fan sensor on GPIO %d\n", FAN_HALLEFFECT);
+  #endif
+
   sensor1.begin();
   sensor2.begin();
   sensor3.begin();
+
+  #if ENABLE_DS18B20_SENSORS
+    sensor1.setWaitForConversion(false); //set the sensors to not wait for conversion, allowing for non-blocking operation
+
+    sensor2.setWaitForConversion(false);
+    sensor3.setWaitForConversion(false);
+  #endif
 
  if (!LittleFS.begin(true)) { //true here automatically formats the filesystem if it fails to mount, which is useful for first-time setup or after a corruption
     Serial.println("LittleFS failed!");
@@ -950,8 +1065,6 @@ void setup() {
 
 // Loop
 void loop() {
-
-
   if (pendingRestart && millis() > restartAt) {
   ESP.restart();
 }
@@ -963,38 +1076,77 @@ void loop() {
     cloudWs.loop();         //keep the cloud websocket alive and handle incoming messages
   }
 
-  if (millis() - lastTime >= 1000) {//check if 1 second has passed since the last sensor reading
+  static bool waitingForConversion = false;//using starting prevents millisecond reset issues, and ensures that the variable is initialized only once, and retains its value across multiple calls to loop()
+  static unsigned long conversionStart = 0;
+
+  // Phase 1: fire the DS18B20 conversion (returns immediately)
+  if (!waitingForConversion && millis() - lastTime >= 1000) {
+    #if ENABLE_DS18B20_SENSORS
+      sensor1.requestTemperatures();
+      sensor2.requestTemperatures();
+      sensor3.requestTemperatures();
+      conversionStart = millis();
+      waitingForConversion = true;
+    #else
+      // No DS18B20 — go straight to the read phase
+      conversionStart = millis();
+      waitingForConversion = true;
+    #endif
+  }
+
+  // Phase 2: wait for conversion, then read and send
+  #if ENABLE_DS18B20_SENSORS
+  if (waitingForConversion && millis() - conversionStart >= 750) {//sensor takes 750ms to measure temperature, so we wait for that duration before reading the values
+  #else
+  if (waitingForConversion) {//activates if DS18B20 sensors are not enabled, so we skip the waiting phase and go straight to reading values
+  #endif
     lastTime = millis();
-   
-    //sensor1.setWaitForConversion(false);//set the sensors to not wait for conversion, allowing for non-blocking operation
-    //sensor2.setWaitForConversion(false);
-   //sensor3.setWaitForConversion(false);
+    waitingForConversion = false;
 
-    // will be uncommented when real sensors are connected:
-    // radiatorInlet = sensor1.getTempCByIndex(0);
-    // radiatorOutlet = sensor2.getTempCByIndex(0);
-    // engineInlet = sensor3.getTempCByIndex(0);
-
-    // dummies for now
-    radiatorInlet = random(40, 60);
+  
+  #if USE_DUMMY_VALUES
+  // Dummy mode: no sensors needed
+    radiatorInlet  = random(40, 60);
     radiatorOutlet = random(40, 50);
-    engineInlet = random(50, 70);
+    engineInlet    = random(50, 70);
+    flowRate       = random(5, 15);     // L/hour, fake for heat-dissipation calc
+    fanSpeed       = random(800, 2000); // RPM, fake for charts
+    ambientTemp    = random(20, 30);
+  #else
+    #if ENABLE_DS18B20_SENSORS
+      float t1 = sensor1.getTempCByIndex(0);
+      float t2 = sensor2.getTempCByIndex(0);
+      float t3 = sensor3.getTempCByIndex(0);
+
+      radiatorInlet  = (t1 == DEVICE_DISCONNECTED_C) ? NAN : t1;
+      radiatorOutlet = (t2 == DEVICE_DISCONNECTED_C) ? NAN : t2;
+      ambientTemp    = (t3 == DEVICE_DISCONNECTED_C) ? NAN : t3;
+    #endif
+
+   #if ENABLE_NTC_SENSOR
+      engineInlet = readNTCTemperature();
+   #endif
+
+   #if ENABLE_FLOW_SENSOR || ENABLE_FAN_SENSOR
+      updateFlowAndFanPulses();
+   #endif
+  #endif
 
     coolingRate = radiatorInlet - radiatorOutlet;
     radiatorTempDiff = radiatorInlet - radiatorOutlet;
 
-    if (!isnan(lastEngineInlet)) {//check if lastEngineInlet is a valid number before calculating the rate of change
+    if (!isnan(lastEngineInlet)) {
       unsigned long now = millis();
-      float dt = (now - lastEngineTime) / 1000.0;//convert milliseconds to seconds
+      float dt = (now - lastEngineTime) / 1000.0;
       if (dt > 0) {
         tempRateOfChange = (engineInlet - lastEngineInlet) / dt;
       }
     }
-    lastEngineInlet = engineInlet;//store the current engine inlet temperature for the next iteration
+    lastEngineInlet = engineInlet;
     lastEngineTime = millis();
 
     if (!isnan(flowRate) && flowRate > 0) {
-      const float Cp = 4180.0;//specific heat capacity of water in J/(kg·°C)
+      const float Cp = 4180.0;
       heatDissipation = flowRate * Cp * (radiatorInlet - radiatorOutlet);
     } else {
       heatDissipation = NAN;
@@ -1022,6 +1174,4 @@ void loop() {
 
     sendSensorData();
   }
-
-  
 }
