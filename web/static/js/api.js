@@ -1,10 +1,14 @@
 const API_BASE = '';
 
 async function apiRequest(path, options = {}) {
+    const { headers, ...rest } = options;
     const res = await fetch(API_BASE + path, {
-        headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+        ...rest,
         credentials: 'include',
-        ...options,
+        headers: {
+            'Content-Type': 'application/json',
+            ...(headers || {}),
+        },
     });
     if (!res.ok) throw new Error(await res.text());
     return res.json();
