@@ -9,7 +9,6 @@ class Esp32Data(BaseModel):
     rpm: Optional[float] = None
     fanSpeed: Optional[float] = None
     flowRate: Optional[float] = None
-    efficiency: Optional[float] = None
     coolingRate: Optional[float] = None
     heatDissipation: Optional[float] = None
     tempRateOfChange: Optional[float] = None

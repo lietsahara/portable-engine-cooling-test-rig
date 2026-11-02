@@ -59,8 +59,16 @@ async def websocket_esp32(websocket: WebSocket):
 @router.websocket("/ws/dashboard")
 async def websocket_dashboard(websocket: WebSocket):
     await manager.connect_dashboard(websocket)
+    print(f"[DASHBOARD WS] client connected, total={len(manager.dashboard_connections)}")
     try:
         while True:
-            await websocket.receive_text()
-    except WebSocketDisconnect:
+            try:
+                await websocket.receive_text()
+            except WebSocketDisconnect:
+                break
+            except Exception as e:
+                print(f"[DASHBOARD WS] receive error: {type(e).__name__}: {e}")
+                break
+    finally:
+        print(f"[DASHBOARD WS] client disconnected, remaining={len(manager.dashboard_connections) - 1}")
         manager.disconnect_dashboard(websocket)

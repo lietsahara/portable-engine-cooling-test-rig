@@ -66,14 +66,16 @@ const char* default_ap_password = "1_Mpaka_8";
 
 String ap_ssid = default_ap_ssid;
 String ap_password = default_ap_password;
-String sta_ssid = "";
-String sta_password = "";
+String sta_ssid = "dekut";
+String sta_password = "dekut@ict2023";
 bool use_sta = false;
 bool sta_connected = false;
 
 // Cloud WebSocket
-const char* cloud_ws_host = "portable-engine-cooling-test-rig.onrender.com"; // tells the esp32 the backend server to connect to
+//const char* cloud_ws_host = "echo.websocket.org"; // tells the esp32 the backend server to connect to
 const int cloud_ws_port = 443;
+//const char* cloud_ws_path = "/";
+const char* cloud_ws_host = "portable-engine-cooling-test-rig.onrender.com"; // tells the esp32 the backend server to connect to
 const char* cloud_ws_path = "/ws/esp32";
 WebSocketsClient cloudWs;
 bool cloud_ws_connected = false;
@@ -448,15 +450,18 @@ void initWebSocket() {
 // Cloud WebSocket event
 //uses arduinoWebsockets library for the esp32 client connected to cloud server
 void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
+  Serial.printf("[WS] RAW event=%d len=%u\n", (int)type, (unsigned)length);
   switch (type) {
-    case WStype_DISCONNECTED:
-      cloud_ws_connected = false;
-      Serial.println("[CloudWS] Disconnected");//CloudWs is a log type prefix to distinguish between local and cloud websocket logs
-      break;
     case WStype_CONNECTED:
       cloud_ws_connected = true;
       Serial.println("[CloudWS] Connected");
       break;
+
+    case WStype_DISCONNECTED:
+      cloud_ws_connected = false;
+      Serial.println("[CloudWS] Disconnected");//CloudWs is a log type prefix to distinguish between local and cloud websocket logs
+      break;
+   
     case WStype_TEXT: {
       Serial.printf("[CloudWS] Received: %.*s\n", (int)length, (const char*)payload);
       JsonDocument doc;
@@ -486,10 +491,10 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
 }
 
 void initCloudWebSocket() {
-  cloudWs.beginSSL(cloud_ws_host, cloud_ws_port, cloud_ws_path);
+  cloudWs.beginSSL(cloud_ws_host, cloud_ws_port, cloud_ws_path, "", nullptr);//added a dummy to check if a bug in the library prevents a connection if there is no fingerprint argument
   cloudWs.onEvent(webSocketEvent);
-  cloudWs.setReconnectInterval(2000);
-  cloudWs.enableHeartbeat(60000, 3000, 2);//wait 60 seconds before sending a ping, wait 3 seconds for a pong, and retry 2 times before disconnecting i.e to detect silent deaths
+  cloudWs.setReconnectInterval(5000);
+  //cloudWs.enableHeartbeat(60000, 3000, 2);//wait 60 seconds before sending a ping, wait 3 seconds for a pong, and retry 2 times before disconnecting i.e to detect silent deaths
 }
 
 // Cloud command handling
@@ -568,6 +573,18 @@ void startAPMode() {
   Serial.println(ap_ssid);
 }
 
+bool hasInternet() {
+  WiFiClientSecure client;
+  client.setInsecure();  // diagnostic only
+  HTTPClient https;
+  https.begin(client, "https://www.google.com/generate_204");//pings google to check for internet connectivity
+  https.setTimeout(5000);
+  int code = https.GET();
+  https.end();
+  Serial.printf("[Internet check] code=%d\n", code);
+  return code == 204 || code == 200;
+}
+
 void trySTAMode() {
   if (!use_sta || sta_ssid.length() == 0) {
     Serial.println("STA not requested. Running as AP-only server.");
@@ -588,6 +605,17 @@ void trySTAMode() {
     sta_connected = true;
     Serial.println("\nSTA connected. IP: ");
     Serial.println(WiFi.localIP());
+
+    Serial.print("Gateway:     "); Serial.println(WiFi.gatewayIP());//added to check if the esp32 is getting a valid gateway from the router
+    Serial.print("DNS server:  "); Serial.println(WiFi.dnsIP());
+    Serial.print("RSSI:        "); Serial.println(WiFi.RSSI());
+
+    if (!hasInternet()) {
+      Serial.println("  WARNING: Wi-Fi connected but no internet. Cloud mode will not work on this network.");
+    } else {
+      Serial.println("  Internet: OK");
+    }
+  
   } else {
     sta_connected = false;
     Serial.println("\nSTA failed. Staying AP-only.");
@@ -846,6 +874,7 @@ void sendSensorData() {
   }
 }
 
+
 // Setup
 void setup() {
   randomSeed(esp_random());//to ensure every boot has a different random seed for session tokens and other random values
@@ -855,7 +884,7 @@ void setup() {
   sensor2.begin();
   sensor3.begin();
 
-  if (!LittleFS.begin(true)) { //true here automatically formats the filesystem if it fails to mount, which is useful for first-time setup or after a corruption
+ if (!LittleFS.begin(true)) { //true here automatically formats the filesystem if it fails to mount, which is useful for first-time setup or after a corruption
     Serial.println("LittleFS failed!");
   }
 
@@ -881,6 +910,15 @@ void setup() {
   trySTAMode();
 
 
+  if (sta_connected) {//if in sta mode and connected to the cloud, initialize the cloud websocket
+
+    #if DEBUG_HTTPS_TEST
+    testRenderHTTPS(); 
+    #endif      // diagnostic
+
+    initCloudWebSocket();
+
+  }
   initWebSocket();
 
   //server.on redisters HTTP GET and POST handlers for various endpoints
@@ -905,18 +943,15 @@ void setup() {
   server.begin();//start the local webserver
   Serial.println("Local webserver started");
 
-  if (sta_connected) {//if in sta mode and connected to the cloud, initialize the cloud websocket
-
-    #if DEBUG_HTTPS_TEST
-    testRenderHTTPS(); 
-    #endif      // diagnostic
-
-    initCloudWebSocket();
-  }
+  Serial.printf("Free heap: %u, Max alloc: %u\n",
+              ESP.getFreeHeap(), ESP.getMaxAllocHeap());//checking free heap and max alloc heap to ensure enough memory is available for cloud websocket operations
+  
 }
 
 // Loop
 void loop() {
+
+
   if (pendingRestart && millis() > restartAt) {
   ESP.restart();
 }
@@ -930,10 +965,10 @@ void loop() {
 
   if (millis() - lastTime >= 1000) {//check if 1 second has passed since the last sensor reading
     lastTime = millis();
-
-    sensor1.requestTemperatures();//request temperature readings from the sensors
-    sensor2.requestTemperatures();
-    sensor3.requestTemperatures();
+   
+    //sensor1.setWaitForConversion(false);//set the sensors to not wait for conversion, allowing for non-blocking operation
+    //sensor2.setWaitForConversion(false);
+   //sensor3.setWaitForConversion(false);
 
     // will be uncommented when real sensors are connected:
     // radiatorInlet = sensor1.getTempCByIndex(0);
@@ -987,4 +1022,6 @@ void loop() {
 
     sendSensorData();
   }
+
+  
 }
