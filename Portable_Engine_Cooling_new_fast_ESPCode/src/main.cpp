@@ -9,6 +9,7 @@
 #include <Preferences.h>
 #include <SD.h>
 #include <SPI.h>
+#include <ESPmDNS.h>//to enable access with a single hostname instead of an IP address, e.g. http://engine-cooling.local
 #include <HTTPClient.h>//used only by testRenderHTTPS() diagnostic below
 
 
@@ -87,6 +88,9 @@ bool interrupted = false;
 // Restart state
 bool pendingRestart = false;
 unsigned long restartAt = 0;
+
+//varying the frequency of sending data to the cloud or local display to reduce network traffic and improve performance
+unsigned long lastSendTime = 0; // last time sensor data was sent to cloud or local display
 
 // RAM buffer for RAM-only recording
 #define RAM_BUFFER_SIZE 200
@@ -173,6 +177,7 @@ const char index_html[] PROGMEM = R"rawliteral(
 </head>
 <body>
 <h1>Engine Cooling Monitor</h1>
+<p style="font-size:0.8rem;color:#666;">Access: http://engine-cooling.local</p>
 <p class="status">Status: <span id='apStatus'>--</span> | <span id='staStatus'>--</span> | <span id='cloudStatus'>--</span> | <span id='sdStatus'>--</span> | <span id='recStatus'>--</span></p>
 
 <p>Radiator Inlet: <span id='radiatorInlet'>__</span> C</p>
@@ -1023,6 +1028,26 @@ void setup() {
   WiFi.mode(WIFI_AP_STA);
   startAPMode();
   trySTAMode();
+  
+  //########################################################################
+  //OPTIONAL DEPENDENCY:
+  //#########################################################################
+  // mDNS (works in AP and/or STA)
+  // Reachable as http://engine-cooling.local from any device on the same network
+  //Uses a unique name to avoid collisions with other ESP32s
+  // Numeric IPs (192.168.4.1 for AP, router-assigned IP for STA) still work
+
+  if (!MDNS.begin("engine-cooling")) {  //sets up mDNS with the hostname "engine-cooling" and also checks if it was successful.
+    Serial.println("mDNS: failed to start (IP access still works)");
+  } else {
+    MDNS.addService("http", "tcp", 80); //MDNS.addService : sets up a service record for the mDNS responder. 
+                                        //http is the service type, tcp is the protocol, and 80 is the port number.
+    if (sta_connected) {
+      Serial.println("mDNS: http://engine-cooling.local  (STA)");
+    }
+    Serial.println("mDNS: http://engine-cooling.local  (AP, 192.168.4.1)");
+  }
+  //########################################################################
 
 
   if (sta_connected) {//if in sta mode and connected to the cloud, initialize the cloud websocket
@@ -1171,7 +1196,9 @@ void loop() {
         writeToRAM(line);
       }
     }
-
+  if (millis() - lastSendTime >= 2000) { // send data every 2 seconds
+    lastSendTime = millis(); 
     sendSensorData();
+  }
   }
 }
