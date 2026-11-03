@@ -62,7 +62,6 @@ function updateLiveValues(d) {
         rpm: 'rpm',
         fanSpeed: 'fanSpeed',
         flowRate: 'flowRate',
-        efficiency: 'efficiency',
         coolingRate: 'coolingRate',
         heatDissipation: 'heatDissipation',
         tempRateOfChange: 'tempRateOfChange',
