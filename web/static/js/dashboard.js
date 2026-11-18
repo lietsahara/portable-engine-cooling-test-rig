@@ -54,19 +54,19 @@ ws.onmessage = (event) => {
 };
 
 function updateLiveValues(d) {
-    const map = {
-        radiatorInlet: 'radiatorInlet',
-        radiatorOutlet: 'radiatorOutlet',
-        engineInlet: 'engineInlet',
-        ambientTemp: 'ambientTemp',
-        rpm: 'rpm',
-        fanSpeed: 'fanSpeed',
-        flowRate: 'flowRate',
-        coolingRate: 'coolingRate',
-        heatDissipation: 'heatDissipation',
-        tempRateOfChange: 'tempRateOfChange',
-        radiatorTempDiff: 'radiatorTempDiff',
-    };
+    // The server broadcasts snake_case keys (e.g., radiator_inlet)
+    document.getElementById('radiatorInlet').textContent = d.radiator_inlet != null ? d.radiator_inlet.toFixed(1) : '--';
+    document.getElementById('radiatorOutlet').textContent = d.radiator_outlet != null ? d.radiator_outlet.toFixed(1) : '--';
+    document.getElementById('engineInlet').textContent = d.engine_inlet != null ? d.engine_inlet.toFixed(1) : '--';
+    document.getElementById('ambientTemp').textContent = d.ambient_temp != null ? d.ambient_temp.toFixed(1) : '--';
+    document.getElementById('rpm').textContent = d.rpm != null ? d.rpm.toFixed(0) : '--';
+    document.getElementById('fanSpeed').textContent = d.fan_speed != null ? d.fan_speed.toFixed(0) : '--';
+    document.getElementById('flowRate').textContent = d.flow_rate != null ? d.flow_rate.toFixed(1) : '--';
+    document.getElementById('coolingRate').textContent = d.cooling_rate != null ? d.cooling_rate.toFixed(1) : '--';
+    document.getElementById('heatDissipation').textContent = d.heat_dissipation != null ? d.heat_dissipation.toFixed(0) : '--';
+    document.getElementById('tempRateOfChange').textContent = d.temp_rate_of_change != null ? d.temp_rate_of_change.toFixed(2) : '--';
+    document.getElementById('radiatorTempDiff').textContent = d.radiator_temp_diff != null ? d.radiator_temp_diff.toFixed(1) : '--';
+}
     for (const [key, id] of Object.entries(map)) {
         const el = document.getElementById(id);
         if (el) el.textContent = d[key] != null ? d[key].toFixed(2) : '--';
