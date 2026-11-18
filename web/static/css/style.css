@@ -43,8 +43,32 @@ kbd { font: 500 .75rem 'JetBrains Mono', monospace; background: rgba(255,255,255
 .hero button { font:500 .9rem Inter; color:#ddd; background:rgba(0,0,0,.45); border:1px solid rgba(244,63,94,.4); border-radius:12px; padding:.7rem 1.1rem; cursor:pointer; backdrop-filter:blur(8px); transition:background .2s; position:relative; z-index:1; }
 .hero button:hover { background:rgba(244,63,94,.2); border-color:rgba(244,63,94,.8); }
 
-/* --- Grids & Cards --- */
-.live-values { display: grid; grid-template-columns: repeat(auto-fill, minmax(165px, 1fr)); gap: .75rem; margin-bottom: 2rem; }
+/*Grids & Cards*/
+.live-values {
+    display: grid;
+    /* Default size (Before scrolling past) */
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 0.5rem;
+    margin: 2rem 0;
+    
+    /* Sticky settings */
+    position: sticky;
+    top: 80px; /* Sticks below the header */
+    z-index: 40;
+    
+    /* Background styling */
+    background: rgba(7, 8, 10, 0.85);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    padding: 0.5rem;
+    border-radius: 16px;
+    border: 1px solid rgba(255,255,255,0.05);
+    box-shadow: 0 10px 30px -10px rgba(0,0,0,0.8);
+    
+    /* Smooth animation */
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
 .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
 .chart-container { height: 300px; position: relative; padding: 1.1rem; }
 
@@ -56,9 +80,52 @@ kbd { font: 500 .75rem 'JetBrains Mono', monospace; background: rgba(255,255,255
     width: 100% !important;
     height: 100% !important;
 }
-.card { padding: 1rem 1.1rem; color: #8b8b96; font-size: .82rem; display: flex; flex-direction: column; position: relative; }
-.card strong { font-size: 1.65rem; color: #fff; font-weight: 600; margin-top: .2rem; font-family: 'JetBrains Mono', monospace; }
-.card:hover, .chart-container:hover { border-color: rgba(244,63,94,.5); background: rgba(244,63,94,.08); }
+.card {
+    padding: 0.5rem 0.75rem; 
+    color: #8b8b96;
+    font-size: 0.7rem; 
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: 10px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.card strong {
+    font-size: 1.2rem; 
+    color: #fff;
+    font-weight: 600;
+    margin-top: 0.1rem;
+    font-family: 'JetBrains Mono', monospace;
+    transition: font-size 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.card:hover, .chart-container:hover {
+    border-color: rgba(244,63,94,.5); background: rgba(244,63,94,.08);
+}
+
+
+/* TOP CARDS SHRUNK STATE (Active when scrolled down)*/
+.live-values.shrink {
+    grid-template-columns: repeat(auto-fill, minmax(75px, 1fr)); /* Tighter columns */
+    padding: 0.25rem;
+    gap: 0.25rem;
+}
+
+.live-values.shrink .card {
+    padding: 0.25rem 0.4rem;
+}
+
+.live-values.shrink .card span {
+    font-size: 0.55rem; /*Tiny labels*/
+}
+
+.live-values.shrink .card strong {
+    font-size: 0.9rem; /*Legible, but half the size*/
+}
+
 
 @media(max-width: 768px) { .charts-grid { grid-template-columns: 1fr; } }
 

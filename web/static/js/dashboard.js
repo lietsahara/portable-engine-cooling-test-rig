@@ -110,3 +110,30 @@ function trimChart(chart) {
         chart.data.datasets.forEach(ds => ds.data.shift());
     }
 }
+/*Added functionality*/
+/*Auto-Shrink Cards on Scroll */
+document.addEventListener("DOMContentLoaded", () => {
+    const hero = document.querySelector('.hero');
+    const liveValues = document.querySelector('.live-values');
+
+    // If either element doesn't exist on the page, stop.
+    if (!hero || !liveValues) return;
+
+    // We observe the hero section. When it leaves the screen, we shrink.
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (!entry.isIntersecting) {
+                // Hero is out of view (scrolled down)
+                liveValues.classList.add('shrink');
+            } else {
+                // Hero is back in view (scrolled up)
+                liveValues.classList.remove('shrink');
+            }
+        });
+    }, { 
+        // Triggers when the hero section is 80px from the top (accounting for the sticky header)
+        rootMargin: "-80px 0px 0px 0px" 
+    });
+
+    observer.observe(hero);
+});
