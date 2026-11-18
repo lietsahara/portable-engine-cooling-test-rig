@@ -52,6 +52,10 @@ kbd { font: 500 .75rem 'JetBrains Mono', monospace; background: rgba(255,255,255
     background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08);
     border-radius: 16px; transition: border-color .2s, background-color .2s; transform: translateZ(0);
 }
+.chart-container canvas {/* Ensure the chart fills the container*/
+    width: 100% !important;
+    height: 100% !important;
+}
 .card { padding: 1rem 1.1rem; color: #8b8b96; font-size: .82rem; display: flex; flex-direction: column; position: relative; }
 .card strong { font-size: 1.65rem; color: #fff; font-weight: 600; margin-top: .2rem; font-family: 'JetBrains Mono', monospace; }
 .card:hover, .chart-container:hover { border-color: rgba(244,63,94,.5); background: rgba(244,63,94,.08); }
