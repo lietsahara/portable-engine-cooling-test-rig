@@ -1,6 +1,7 @@
 const MAX_POINTS = 60;
 const wsProtocol = location.protocol === 'https:' ? 'wss://' : 'ws://';
-const ws = new WebSocket(`${wsProtocol}${location.host}/ws/dashboard`);const charts = {};
+const ws = new WebSocket(`${wsProtocol}${location.host}/ws/dashboard`);
+const charts = {};
 
 function initChart(id, yLabel, datasets) {
     const ctx = document.getElementById(id).getContext('2d');
@@ -53,24 +54,25 @@ ws.onmessage = (event) => {
     addDataPoint(data);
 };
 
-function updateLiveValues(d) {
-    // The server broadcasts snake_case keys (e.g., radiator_inlet)
-    document.getElementById('radiatorInlet').textContent = d.radiator_inlet != null ? d.radiator_inlet.toFixed(1) : '--';
-    document.getElementById('radiatorOutlet').textContent = d.radiator_outlet != null ? d.radiator_outlet.toFixed(1) : '--';
-    document.getElementById('engineInlet').textContent = d.engine_inlet != null ? d.engine_inlet.toFixed(1) : '--';
-    document.getElementById('ambientTemp').textContent = d.ambient_temp != null ? d.ambient_temp.toFixed(1) : '--';
-    document.getElementById('rpm').textContent = d.rpm != null ? d.rpm.toFixed(0) : '--';
-    document.getElementById('fanSpeed').textContent = d.fan_speed != null ? d.fan_speed.toFixed(0) : '--';
-    document.getElementById('flowRate').textContent = d.flow_rate != null ? d.flow_rate.toFixed(1) : '--';
-    document.getElementById('coolingRate').textContent = d.cooling_rate != null ? d.cooling_rate.toFixed(1) : '--';
-    document.getElementById('heatDissipation').textContent = d.heat_dissipation != null ? d.heat_dissipation.toFixed(0) : '--';
-    document.getElementById('tempRateOfChange').textContent = d.temp_rate_of_change != null ? d.temp_rate_of_change.toFixed(2) : '--';
-    document.getElementById('radiatorTempDiff').textContent = d.radiator_temp_diff != null ? d.radiator_temp_diff.toFixed(1) : '--';
+// Helper to safely format numbers so it never crashes
+function fmt(val, decimals = 1) {
+    if (val === null || val === undefined) return '--';
+    const num = parseFloat(val);
+    return isNaN(num) ? '--' : num.toFixed(decimals);
 }
-    for (const [key, id] of Object.entries(map)) {
-        const el = document.getElementById(id);
-        if (el) el.textContent = d[key] != null ? d[key].toFixed(2) : '--';
-    }
+
+function updateLiveValues(d) {
+    document.getElementById('radiatorInlet').textContent = fmt(d.radiator_inlet, 1);
+    document.getElementById('radiatorOutlet').textContent = fmt(d.radiator_outlet, 1);
+    document.getElementById('engineInlet').textContent = fmt(d.engine_inlet, 1);
+    document.getElementById('ambientTemp').textContent = fmt(d.ambient_temp, 1);
+    document.getElementById('rpm').textContent = fmt(d.rpm, 0);
+    document.getElementById('fanSpeed').textContent = fmt(d.fan_speed, 0);
+    document.getElementById('flowRate').textContent = fmt(d.flow_rate, 1);
+    document.getElementById('coolingRate').textContent = fmt(d.cooling_rate, 1);
+    document.getElementById('heatDissipation').textContent = fmt(d.heat_dissipation, 0);
+    document.getElementById('tempRateOfChange').textContent = fmt(d.temp_rate_of_change, 2);
+    document.getElementById('radiatorTempDiff').textContent = fmt(d.radiator_temp_diff, 1);
 }
 
 function addDataPoint(d) {
@@ -91,7 +93,7 @@ function addPoint(chartId, label, values) {
     chart.data.labels.push(label);
     values.forEach((v, i) => chart.data.datasets[i].data.push(v));
     trimChart(chart);
-    chart.update();
+    chart.update('none'); // 'none' prevents heavy animations
 }
 
 function addPointXY(chartId, x, values) {
@@ -99,7 +101,7 @@ function addPointXY(chartId, x, values) {
     chart.data.labels.push(x);
     values.forEach((v, i) => chart.data.datasets[i].data.push(v));
     trimChart(chart);
-    chart.update();
+    chart.update('none');
 }
 
 function trimChart(chart) {
