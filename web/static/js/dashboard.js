@@ -1,6 +1,7 @@
 const MAX_POINTS = 60;
 const wsProtocol = location.protocol === 'https:' ? 'wss://' : 'ws://';
-const ws = new WebSocket(`${wsProtocol}${location.host}/ws/dashboard`);const charts = {};
+const ws = new WebSocket(`${wsProtocol}${location.host}/ws/dashboard`);
+const charts = {};
 
 function initChart(id, yLabel, datasets) {
     const ctx = document.getElementById(id).getContext('2d');
@@ -53,24 +54,25 @@ ws.onmessage = (event) => {
     addDataPoint(data);
 };
 
+// Helper to safely format numbers so it never crashes
+function fmt(val, decimals = 1) {
+    if (val === null || val === undefined) return '--';
+    const num = parseFloat(val);
+    return isNaN(num) ? '--' : num.toFixed(decimals);
+}
+
 function updateLiveValues(d) {
-    const map = {
-        radiatorInlet: 'radiatorInlet',
-        radiatorOutlet: 'radiatorOutlet',
-        engineInlet: 'engineInlet',
-        ambientTemp: 'ambientTemp',
-        rpm: 'rpm',
-        fanSpeed: 'fanSpeed',
-        flowRate: 'flowRate',
-        coolingRate: 'coolingRate',
-        heatDissipation: 'heatDissipation',
-        tempRateOfChange: 'tempRateOfChange',
-        radiatorTempDiff: 'radiatorTempDiff',
-    };
-    for (const [key, id] of Object.entries(map)) {
-        const el = document.getElementById(id);
-        if (el) el.textContent = d[key] != null ? d[key].toFixed(2) : '--';
-    }
+    document.getElementById('radiatorInlet').textContent = fmt(d.radiator_inlet, 1);
+    document.getElementById('radiatorOutlet').textContent = fmt(d.radiator_outlet, 1);
+    document.getElementById('engineInlet').textContent = fmt(d.engine_inlet, 1);
+    document.getElementById('ambientTemp').textContent = fmt(d.ambient_temp, 1);
+    document.getElementById('rpm').textContent = fmt(d.rpm, 0);
+    document.getElementById('fanSpeed').textContent = fmt(d.fan_speed, 0);
+    document.getElementById('flowRate').textContent = fmt(d.flow_rate, 1);
+    document.getElementById('coolingRate').textContent = fmt(d.cooling_rate, 1);
+    document.getElementById('heatDissipation').textContent = fmt(d.heat_dissipation, 0);
+    document.getElementById('tempRateOfChange').textContent = fmt(d.temp_rate_of_change, 2);
+    document.getElementById('radiatorTempDiff').textContent = fmt(d.radiator_temp_diff, 1);
 }
 
 function addDataPoint(d) {
@@ -91,7 +93,7 @@ function addPoint(chartId, label, values) {
     chart.data.labels.push(label);
     values.forEach((v, i) => chart.data.datasets[i].data.push(v));
     trimChart(chart);
-    chart.update();
+    chart.update('none'); // 'none' prevents heavy animations
 }
 
 function addPointXY(chartId, x, values) {
@@ -99,7 +101,7 @@ function addPointXY(chartId, x, values) {
     chart.data.labels.push(x);
     values.forEach((v, i) => chart.data.datasets[i].data.push(v));
     trimChart(chart);
-    chart.update();
+    chart.update('none');
 }
 
 function trimChart(chart) {
@@ -108,3 +110,30 @@ function trimChart(chart) {
         chart.data.datasets.forEach(ds => ds.data.shift());
     }
 }
+/*Added functionality*/
+/*Auto-Shrink Cards on Scroll */
+document.addEventListener("DOMContentLoaded", () => {
+    const hero = document.querySelector('.hero');
+    const liveValues = document.querySelector('.live-values');
+
+    // If either element doesn't exist on the page, stop.
+    if (!hero || !liveValues) return;
+
+    // We observe the hero section. When it leaves the screen, we shrink.
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (!entry.isIntersecting) {
+                // Hero is out of view (scrolled down)
+                liveValues.classList.add('shrink');
+            } else {
+                // Hero is back in view (scrolled up)
+                liveValues.classList.remove('shrink');
+            }
+        });
+    }, { 
+        // Triggers when the hero section is 80px from the top (accounting for the sticky header)
+        rootMargin: "-80px 0px 0px 0px" 
+    });
+
+    observer.observe(hero);
+});

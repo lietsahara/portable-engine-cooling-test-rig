@@ -4,55 +4,86 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Panel</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
     <header>
-        <h1>Admin Panel</h1>
-        <nav>
-            <a href="/">Dashboard</a>
-            <a href="/admin">Admin</a>
-        </nav>
+        <h1>Admin Controls</h1>
+        <nav><a href="/">Dashboard</a><a href="/admin" class="pill">Admin</a></nav>
     </header>
-    <main id="admin-content">
+
+    <main class="admin-container">
+        <!-- Login Section -->
         <div id="login-section">
-            <h2>Login</h2>
-            <input type="password" id="admin-password" placeholder="Password">
-            <button onclick="login()">Login</button>
+            <h2>Admin Login</h2>
+            <input type="password" id="admin-password" placeholder="Enter Admin Password">
+            <button class="primary" onclick="login()" style="width: 100%;">Login</button>
             <p id="login-error"></p>
         </div>
-        <div id="admin-panel" style="display:none;">
-            <h2>Recording</h2>
-            <button onclick="startRecording()">Start</button>
-            <button onclick="pauseRecording()">Pause</button>
-            <button onclick="stopRecording()">Stop</button>
-            <p>Status: <span id="recording-status">Idle</span></p>
 
-            <h2>Project</h2>
-            <input type="text" id="project-name" placeholder="Project name">
-            <label><input type="checkbox" id="save-sd" checked> Save to SD</label>
-            <label><input type="checkbox" id="save-db" checked> Save to DB</label>
-            <button onclick="newProject()">New Project</button>
+        <!-- Main Admin Panel -->
+        <div id="admin-panel">
+            
+            <!-- Recording -->
+            <div class="admin-card">
+                <h3>Recording Control</h3>
+                <div class="btn-row">
+                    <button class="primary" onclick="startRecording()">Start</button>
+                    <button onclick="pauseRecording()">Pause</button>
+                    <button onclick="stopRecording()">Stop</button>
+                </div>
+                <p style="color: #9a9aa6; font-size: 0.85rem;">Status: <span id="recording-status" style="color: #fff;">Idle</span></p>
+            </div>
 
-            <h2>OTA & Network</h2>
-            <button onclick="restartEsp()">Restart ESP32</button>
-            <button onclick="switchMode('ap')">Switch to AP Mode</button>
-            <button onclick="switchMode('sta')">Switch to STA Mode</button>
-            <h3>Network Config</h3>
-            <input type="text" id="ap-ssid" placeholder="AP SSID">
-            <input type="password" id="ap-password" placeholder="AP Password">
-            <input type="text" id="sta-ssid" placeholder="STA SSID">
-            <input type="password" id="sta-password" placeholder="STA Password">
-            <button onclick="updateNetwork()">Update Network</button>
+            <!-- Project -->
+            <div class="admin-card">
+                <h3>Project Settings</h3>
+                <input type="text" id="project-name" placeholder="Project Name (e.g. Baseline Test)">
+                <div class="checkbox-row">
+                    <label><input type="checkbox" id="save-sd" checked> Save to SD</label>
+                    <label><input type="checkbox" id="save-db" checked> Save to DB</label>
+                </div>
+                <button onclick="newProject()" style="width: 100%;">Create Project</button>
+            </div>
 
-            <h2>Change Password</h2>
-            <input type="password" id="old-password" placeholder="Old password">
-            <input type="password" id="new-password" placeholder="New password">
-            <button onclick="changePassword()">Change Password</button>
+            <!-- OTA & Network -->
+            <div class="admin-card full-width">
+                <h3>OTA & Device Network</h3>
+                <div class="btn-row">
+                    <button onclick="restartEsp()">Restart ESP32</button>
+                    <button onclick="switchMode('ap')">Switch to AP Mode</button>
+                    <button onclick="switchMode('sta')">Switch to STA Mode</button>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem;">
+                    <div>
+                        <input type="text" id="ap-ssid" placeholder="AP SSID">
+                        <input type="password" id="ap-password" placeholder="AP Password">
+                    </div>
+                    <div>
+                        <input type="text" id="sta-ssid" placeholder="STA SSID (Router)">
+                        <input type="password" id="sta-password" placeholder="STA Password">
+                    </div>
+                </div>
+                <button onclick="updateNetwork()" style="width: 100%;">Update Network Config</button>
+            </div>
 
-            <p id="admin-message"></p>
+            <!-- Change Password -->
+            <div class="admin-card full-width">
+                <h3>Security</h3>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                    <input type="password" id="old-password" placeholder="Current Password">
+                    <input type="password" id="new-password" placeholder="New Password">
+                </div>
+                <button onclick="changePassword()" style="width: 100%;">Change Password</button>
+            </div>
+
+            <p id="admin-message" class="full-width"></p>
         </div>
     </main>
+
     <script src="/static/js/api.js"></script>
     <script src="/static/js/admin.js"></script>
 </body>

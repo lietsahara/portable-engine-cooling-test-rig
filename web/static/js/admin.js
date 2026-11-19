@@ -7,7 +7,7 @@ async function login() {
         });
         setToken(res.token);
         document.getElementById('login-section').style.display = 'none';
-        document.getElementById('admin-panel').style.display = 'block';
+        document.getElementById('admin-panel').style.display = 'grid';
     } catch (e) {
         document.getElementById('login-error').textContent = 'Login failed';
     }
@@ -55,5 +55,5 @@ function changePassword() {
 // Check if already logged in
 if (getToken()) {
     document.getElementById('login-section').style.display = 'none';
-    document.getElementById('admin-panel').style.display = 'block';
+    document.getElementById('admin-panel').style.display = 'grid';
 }

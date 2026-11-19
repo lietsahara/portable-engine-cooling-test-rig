@@ -4,19 +4,25 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Engine Cooling Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/style.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
     <header>
         <h1>Engine Cooling Monitor</h1>
-        <nav>
-            <a href="/">Dashboard</a>
-            <a href="/admin">Admin</a>
-        </nav>
+        <nav><kbd>Ctrl K</kbd><a href="/">Dashboard</a><a href="/admin" class="pill">Admin</a></nav>
     </header>
-
+    
     <main>
+        <div class="hero">
+            <div class="radar"></div>
+            <h2>Your shortcut to<br>every sensor.</h2>
+            <p>Live cooling telemetry, fast and ergonomic. Press the shortcut to jump to any chart.</p>
+            <button onclick="op()">Search charts&nbsp; <kbd>Ctrl K</kbd></button>
+        </div>
+        
         <section class="live-values">
             <div class="card"><span>Radiator Inlet</span><strong id="radiatorInlet">--</strong> °C</div>
             <div class="card"><span>Radiator Outlet</span><strong id="radiatorOutlet">--</strong> °C</div>
@@ -32,18 +38,48 @@
         </section>
 
         <section class="charts-grid">
-            <div class="chart-container"><canvas id="tempVsTime"></canvas></div>
-            <div class="chart-container"><canvas id="tempVsRpm"></canvas></div>
-            <div class="chart-container"><canvas id="qVsTime"></canvas></div>
-            <div class="chart-container"><canvas id="qVsRpm"></canvas></div>
-            <div class="chart-container"><canvas id="dTdtVsTime"></canvas></div>
-            <div class="chart-container"><canvas id="radiatorDeltaTVsTime"></canvas></div>
-            <div class="chart-container"><canvas id="deltaTVsFlow"></canvas></div>
-            <div class="chart-container"><canvas id="flowVsRpm"></canvas></div>
+            <div class="chart-container" data-title="Temperature vs time"><canvas id="tempVsTime"></canvas></div>
+            <div class="chart-container" data-title="Temperature vs RPM"><canvas id="tempVsRpm"></canvas></div>
+            <div class="chart-container" data-title="Heat dissipation vs time"><canvas id="qVsTime"></canvas></div>
+            <div class="chart-container" data-title="Heat dissipation vs RPM"><canvas id="qVsRpm"></canvas></div>
+            <div class="chart-container" data-title="Temp rate vs time"><canvas id="dTdtVsTime"></canvas></div>
+            <div class="chart-container" data-title="Radiator ΔT vs time"><canvas id="radiatorDeltaTVsTime"></canvas></div>
+            <div class="chart-container" data-title="ΔT vs flow"><canvas id="deltaTVsFlow"></canvas></div>
+            <div class="chart-container" data-title="Flow vs RPM"><canvas id="flowVsRpm"></canvas></div>
         </section>
     </main>
-
+    
+    <div id="pal"><div><input placeholder="Search charts..." aria-label="Search charts"><ul></ul></div></div>
+    
+    <script>
+        window.addEventListener('DOMContentLoaded', () => {
+            if (window.Chart) {
+                Chart.defaults.color = '#9a9aa6'; Chart.defaults.borderColor = 'rgba(255,255,255,.07)';
+                Chart.defaults.font.family = 'Inter,system-ui,sans-serif'; Chart.defaults.animation = false; Chart.defaults.animations = false; 
+            }
+        });
+    </script>
     <script src="/static/js/api.js"></script>
     <script src="/static/js/dashboard.js"></script>
+    
+    <script>
+        setTimeout(() => {
+            const colors = ['#ff6b9d', '#c084fc', '#3b82f6', '#ef4444']; 
+            const paint = (id, cArr) => { if (typeof Chart !== 'undefined') { const chart = Chart.getChart(id); if (chart) { chart.data.datasets.forEach((ds, i) => { ds.borderColor = cArr[i % cArr.length]; ds.borderWidth = 2.5; }); chart.update('none'); } } };
+            paint('tempVsTime', colors); paint('tempVsRpm', [colors[0], colors[1], colors[2]]); paint('qVsTime', [colors[1]]); paint('qVsRpm', [colors[2]]); paint('dTdtVsTime', [colors[0]]); paint('radiatorDeltaTVsTime', [colors[3]]); paint('deltaTVsFlow', [colors[1]]); paint('flowVsRpm', [colors[2]]);       
+        }, 1000);
+    </script>
+    
+    <script>
+        const CH=['tempVsTime', 'tempVsRpm', 'qVsTime', 'qVsRpm', 'dTdtVsTime', 'radiatorDeltaTVsTime', 'deltaTVsFlow', 'flowVsRpm'];
+        const TT=['Temperature vs time', 'Temperature vs RPM', 'Heat dissipation vs time', 'Heat dissipation vs RPM', 'Temp rate vs time', 'Radiator ΔT vs time', 'ΔT vs flow', 'Flow vs RPM'];
+        const go=i=>document.getElementById(CH[i]).closest('.chart-container').scrollIntoView({behavior:'smooth',block:'center'});
+        const P=document.getElementById('pal'),I=P.querySelector('input'),U=P.querySelector('ul'); let sel=0,L=[];
+        function draw(){const q=I.value.toLowerCase();L=TT.map((t,i)=>[t,i]).filter(x=>x[0].toLowerCase().includes(q));sel=Math.min(sel,Math.max(L.length-1,0));U.innerHTML=L.map((x,k)=>`<li class="${k==sel?'on':''}" data-i="${x[1]}">${x[0]}</li>`).join('')||'<li>No charts match</li>'}
+        function op(){P.classList.add('open');I.value='';sel=0;draw();I.focus()}
+        function cl(){P.classList.remove('open')}
+        U.onclick=e=>{const i=e.target.dataset.i;if(i!=null){cl();go(+i)}}; P.onclick=e=>{if(e.target===P)cl()}; I.oninput=()=>{sel=0;draw()};
+        addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()=='k'){e.preventDefault();op()}else if(P.classList.contains('open')){if(e.key=='Escape')cl();if(e.key=='ArrowDown'){sel=Math.min(sel+1,L.length-1);draw()}if(e.key=='ArrowUp'){sel=Math.max(sel-1,0);draw()}if(e.key=='Enter'&&L[sel]){cl();go(L[sel][1])}}});
+    </script>
 </body>
 </html>
